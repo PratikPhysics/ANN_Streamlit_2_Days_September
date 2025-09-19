@@ -83,6 +83,10 @@ if st.button("Predict Churn"):
             if col in input_df.columns:
                 input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0, 'No internet service': 0}).astype(int)
 
+        # Handle TotalCharges explicitly as a numerical column
+        input_df['TotalCharges'] = pd.to_numeric(input_df['TotalCharges'], errors='coerce')
+        input_df['TotalCharges'].fillna(0, inplace=True)
+        
         # Apply the preprocessor
         input_processed = preprocessor.transform(input_df)
 
