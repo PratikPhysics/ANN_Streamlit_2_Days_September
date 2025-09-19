@@ -44,9 +44,9 @@ with st.container():
     # Create a dictionary from the user inputs
     input_data = {
         'gender': gender,
-        'SeniorCitizen': 0, # Assuming no senior citizen field for simplicity, set to 0
-        'Partner': 'No',    # Assuming no partner field for simplicity, set to 'No'
-        'Dependents': 'No', # Assuming no dependents field for simplicity, set to 'No'
+        'SeniorCitizen': 0,
+        'Partner': 'No',
+        'Dependents': 'No',
         'tenure': tenure,
         'PhoneService': has_phone_service,
         'MultipleLines': multiple_lines,
@@ -83,9 +83,11 @@ if st.button("Predict Churn"):
             if col in input_df.columns:
                 input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0, 'No internet service': 0}).astype(int)
 
-        # Handle TotalCharges explicitly as a numerical column, avoiding inplace operation
-        input_df['TotalCharges'] = pd.to_numeric(input_df['TotalCharges'], errors='coerce')
-        input_df['TotalCharges'] = input_df['TotalCharges'].fillna(0)
+        # Explicitly cast numerical columns to float to prevent errors
+        numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
+        for col in numerical_cols:
+            if col in input_df.columns:
+                input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0).astype(float)
         
         # Apply the preprocessor
         input_processed = preprocessor.transform(input_df)
