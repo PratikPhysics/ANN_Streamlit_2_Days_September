@@ -71,7 +71,7 @@ input_df = pd.DataFrame([input_data])
 if st.button("Predict Churn"):
     try:
         # Preprocess the input data
-        # Handle 'No' and 'Yes' values to avoid the ValueError and FutureWarning
+        # Handle 'No' and 'Yes' values
         binary_cols = ['PhoneService', 'MultipleLines', 'PaperlessBilling', 'Partner', 'Dependents']
         for col in binary_cols:
             if col in input_df.columns:
@@ -83,9 +83,9 @@ if st.button("Predict Churn"):
             if col in input_df.columns:
                 input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0, 'No internet service': 0}).astype(int)
 
-        # Handle TotalCharges explicitly as a numerical column
+        # Handle TotalCharges explicitly as a numerical column, avoiding inplace operation
         input_df['TotalCharges'] = pd.to_numeric(input_df['TotalCharges'], errors='coerce')
-        input_df['TotalCharges'].fillna(0, inplace=True)
+        input_df['TotalCharges'] = input_df['TotalCharges'].fillna(0)
         
         # Apply the preprocessor
         input_processed = preprocessor.transform(input_df)
