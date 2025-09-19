@@ -1,120 +1,103 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import pickle
 import tensorflow as tf
+import pickle
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.compose import ColumnTransformer
 
-# Define a function to load the model and preprocessor
-# Using st.cache_resource to cache the model for performance
-@st.cache_resource
-def load_assets():
-    """
-    Loads the preprocessor and the deep learning model.
-    """
+# Load the model and preprocessor
+try:
+    model = tf.keras.models.load_model('best_ann_model.h5')
+    with open('preprocessor.pkl', 'rb') as f:
+        preprocessor = pickle.load(f)
+except Exception as e:
+    st.error(f"Error loading model or preprocessor: {e}")
+    st.stop()
+
+# Set up the Streamlit app
+st.set_page_config(page_title="Customer Churn Prediction", layout="centered")
+st.title("Customer Churn Prediction")
+st.markdown("Enter customer details to predict if they will churn.")
+
+# Create input widgets for user data
+with st.container():
+    st.header("Customer Information")
+    age = st.slider("Age", 18, 90, 30)
+    gender = st.selectbox("Gender", ["Male", "Female"])
+    tenure = st.number_input("Tenure (months)", min_value=0, max_value=72, value=12)
+    has_phone_service = st.selectbox("Has Phone Service?", ["Yes", "No"])
+    multiple_lines = st.selectbox("Has Multiple Lines?", ["Yes", "No"])
+    has_internet_service = st.selectbox("Has Internet Service?", ["DSL", "Fiber optic", "No"])
+    online_security = st.selectbox("Online Security", ["Yes", "No", "No internet service"])
+    online_backup = st.selectbox("Online Backup", ["Yes", "No", "No internet service"])
+    device_protection = st.selectbox("Device Protection", ["Yes", "No", "No internet service"])
+    tech_support = st.selectbox("Tech Support", ["Yes", "No", "No internet service"])
+    streaming_tv = st.selectbox("Streaming TV", ["Yes", "No", "No internet service"])
+    streaming_movies = st.selectbox("Streaming Movies", ["Yes", "No", "No internet service"])
+    contract = st.selectbox("Contract Type", ["Month-to-month", "One year", "Two year"])
+    paperless_billing = st.selectbox("Paperless Billing", ["Yes", "No"])
+    payment_method = st.selectbox("Payment Method", ["Electronic check", "Mailed check", "Bank transfer (automatic)", "Credit card (automatic)"])
+    monthly_charges = st.number_input("Monthly Charges", min_value=0.0, max_value=200.0, value=50.0)
+    total_charges = st.number_input("Total Charges", min_value=0.0, value=600.0)
+    
+    # Create a dictionary from the user inputs
+    input_data = {
+        'gender': gender,
+        'SeniorCitizen': 0, # Assuming no senior citizen field for simplicity, set to 0
+        'Partner': 'No',    # Assuming no partner field for simplicity, set to 'No'
+        'Dependents': 'No', # Assuming no dependents field for simplicity, set to 'No'
+        'tenure': tenure,
+        'PhoneService': has_phone_service,
+        'MultipleLines': multiple_lines,
+        'InternetService': has_internet_service,
+        'OnlineSecurity': online_security,
+        'OnlineBackup': online_backup,
+        'DeviceProtection': device_protection,
+        'TechSupport': tech_support,
+        'StreamingTV': streaming_tv,
+        'StreamingMovies': streaming_movies,
+        'Contract': contract,
+        'PaperlessBilling': paperless_billing,
+        'PaymentMethod': payment_method,
+        'MonthlyCharges': monthly_charges,
+        'TotalCharges': total_charges,
+    }
+
+# Convert input data to a DataFrame
+input_df = pd.DataFrame([input_data])
+
+# Button to make a prediction
+if st.button("Predict Churn"):
     try:
-        # Load the preprocessor
-        with open('preprocessor.pkl', 'rb') as file:
-            preprocessor = pickle.load(file)
+        # Preprocess the input data
+        # Handle 'No' and 'Yes' values to avoid the ValueError
+        for col in ['PhoneService', 'MultipleLines', 'PaperlessBilling', 'Partner', 'Dependents']:
+            if col in input_df.columns:
+                input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0})
         
-        # Load the trained Keras model
-        model = tf.keras.models.load_model('best_ann_model.h5')
-        return preprocessor, model
-    except FileNotFoundError:
-        st.error("Error: The 'preprocessor.pkl' or 'best_ann_model.h5' file was not found.")
-        st.stop()
+        # Handle 'No' and 'Yes' for internet service columns
+        internet_cols = ['OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']
+        for col in internet_cols:
+            if col in input_df.columns:
+                input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0, 'No internet service': 0})
+
+        # Apply the preprocessor
+        input_processed = preprocessor.transform(input_df)
+
+        # Make a prediction
+        prediction = model.predict(input_processed)
+        churn_probability = prediction[0][0]
+
+        # Display the result
+        st.subheader("Prediction Result")
+        if churn_probability > 0.5:
+            st.error(f"Prediction: This customer is likely to churn. (Probability: {churn_probability:.2f})")
+        else:
+            st.success(f"Prediction: This customer is not likely to churn. (Probability: {churn_probability:.2f})")
+    
     except Exception as e:
-        st.error(f"An error occurred while loading the assets: {e}")
-        st.stop()
+        st.error(f"An error occurred during prediction: {e}")
 
-# Load the assets
-preprocessor, model = load_assets()
-
-# --- Streamlit UI ---
-st.set_page_config(page_title="Customer Churn Predictor", layout="wide")
-st.title("Customer Churn Prediction App")
-st.markdown("""
-This application predicts whether a customer will churn based on their demographic and service data.
-Fill in the details below and click 'Predict' to see the result.
-""")
-
-# Create a sidebar for user input
-st.sidebar.header("Customer Information")
-
-# Function to get user input from the sidebar
-def user_input_features():
-    # User input for each feature
-    gender = st.sidebar.selectbox("Gender", ('Male', 'Female'))
-    SeniorCitizen = st.sidebar.selectbox("Senior Citizen", ('No', 'Yes'))
-    Partner = st.sidebar.selectbox("Partner", ('No', 'Yes'))
-    Dependents = st.sidebar.selectbox("Dependents", ('No', 'Yes'))
-    tenure = st.sidebar.slider("Tenure (in months)", 0, 72, 30)
-    PhoneService = st.sidebar.selectbox("Phone Service", ('No', 'Yes'))
-    MultipleLines = st.sidebar.selectbox("Multiple Lines", ('No phone service', 'No', 'Yes'))
-    InternetService = st.sidebar.selectbox("Internet Service", ('DSL', 'Fiber optic', 'No'))
-    OnlineSecurity = st.sidebar.selectbox("Online Security", ('No internet service', 'No', 'Yes'))
-    OnlineBackup = st.sidebar.selectbox("Online Backup", ('No internet service', 'No', 'Yes'))
-    DeviceProtection = st.sidebar.selectbox("Device Protection", ('No internet service', 'No', 'Yes'))
-    TechSupport = st.sidebar.selectbox("Tech Support", ('No internet service', 'No', 'Yes'))
-    StreamingTV = st.sidebar.selectbox("Streaming TV", ('No internet service', 'No', 'Yes'))
-    StreamingMovies = st.sidebar.selectbox("Streaming Movies", ('No internet service', 'No', 'Yes'))
-    Contract = st.sidebar.selectbox("Contract", ('Month-to-month', 'One year', 'Two year'))
-    PaperlessBilling = st.sidebar.selectbox("Paperless Billing", ('No', 'Yes'))
-    PaymentMethod = st.sidebar.selectbox("Payment Method", ('Electronic check', 'Mailed check', 'Bank transfer (automatic)', 'Credit card (automatic)'))
-    MonthlyCharges = st.sidebar.slider("Monthly Charges", 18.0, 120.0, 60.0)
-    TotalCharges = st.sidebar.slider("Total Charges", 0.0, 8700.0, 1000.0)
-
-    # Store data in a dictionary
-    data = {'gender': gender,
-            'SeniorCitizen': SeniorCitizen,
-            'Partner': Partner,
-            'Dependents': Dependents,
-            'tenure': tenure,
-            'PhoneService': PhoneService,
-            'MultipleLines': MultipleLines,
-            'InternetService': InternetService,
-            'OnlineSecurity': OnlineSecurity,
-            'OnlineBackup': OnlineBackup,
-            'DeviceProtection': DeviceProtection,
-            'TechSupport': TechSupport,
-            'StreamingTV': StreamingTV,
-            'StreamingMovies': StreamingMovies,
-            'Contract': Contract,
-            'PaperlessBilling': PaperlessBilling,
-            'PaymentMethod': PaymentMethod,
-            'MonthlyCharges': MonthlyCharges,
-            'TotalCharges': TotalCharges}
-            
-    # Convert dictionary to DataFrame
-    features = pd.DataFrame(data, index=[0])
-    return features
-
-# Get user input
-input_df = user_input_features()
-
-# Display user input
-st.subheader("User Input Parameters")
-st.write(input_df)
-
-# Prediction button
-if st.button("Predict"):
-    # Preprocess the input data
-    processed_data = preprocessor.transform(input_df)
-    
-    # Make prediction
-    prediction = model.predict(processed_data)
-    
-    # Convert the prediction probability to a single value
-    churn_probability = prediction[0][0]
-    
-    # Display the result
-    st.subheader("Prediction Result")
-    
-    if churn_probability > 0.5:
-        st.metric(label="Churn Prediction", value="High Risk (Likely to Churn)", delta=f"{churn_probability:.2f}", delta_color="inverse")
-        st.error(f"The model predicts a high probability of churn: {churn_probability:.2f}")
-    else:
-        st.metric(label="Churn Prediction", value="Low Risk (Not Likely to Churn)", delta=f"{churn_probability:.2f}", delta_color="normal")
-        st.success(f"The model predicts a low probability of churn: {churn_probability:.2f}")
-    
-    st.markdown("---")
-    st.info("The `delta` value in the metric widget above shows the churn probability. A value greater than 0.5 indicates a higher risk of churn.")
+st.markdown("---")
+st.info("This app is a demonstration of a machine learning model deployed with Streamlit.")
