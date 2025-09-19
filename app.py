@@ -71,16 +71,17 @@ input_df = pd.DataFrame([input_data])
 if st.button("Predict Churn"):
     try:
         # Preprocess the input data
-        # Handle 'No' and 'Yes' values to avoid the ValueError
-        for col in ['PhoneService', 'MultipleLines', 'PaperlessBilling', 'Partner', 'Dependents']:
+        # Handle 'No' and 'Yes' values to avoid the ValueError and FutureWarning
+        binary_cols = ['PhoneService', 'MultipleLines', 'PaperlessBilling', 'Partner', 'Dependents']
+        for col in binary_cols:
             if col in input_df.columns:
-                input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0})
+                input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0}).astype(int)
         
         # Handle 'No' and 'Yes' for internet service columns
         internet_cols = ['OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']
         for col in internet_cols:
             if col in input_df.columns:
-                input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0, 'No internet service': 0})
+                input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0, 'No internet service': 0}).astype(int)
 
         # Apply the preprocessor
         input_processed = preprocessor.transform(input_df)
