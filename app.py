@@ -6,7 +6,13 @@ import pickle
 from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.compose import ColumnTransformer
 
-# 👇 Silence Pandas FutureWarning about downcasting
+# Silence TensorFlow logs (optional)
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+import logging
+logging.getLogger('tensorflow').setLevel(logging.ERROR)
+
+# Silence Pandas FutureWarning
 pd.set_option('future.no_silent_downcasting', True)
 
 # Load the model and preprocessor
@@ -44,23 +50,23 @@ with st.container():
     monthly_charges = st.number_input("Monthly Charges ($)", min_value=0.0, max_value=200.0, value=50.0)
     total_charges = st.number_input("Total Charges ($)", min_value=0.0, value=float(monthly_charges * tenure))
 
-    # 👇 Auto-calculate minimum expected total charges
+    # Auto-calculate minimum expected total charges
     expected_min_total = monthly_charges * tenure
     if total_charges < expected_min_total:
         st.warning(f"💡 Total Charges seems low. Expected at least ${expected_min_total:.2f} for {tenure} months.")
 
-    # 👇 Dynamic Senior Citizen based on age (65+)
+    # Dynamic Senior Citizen based on age (65+)
     senior_citizen = 1 if age >= 65 else 0
     partner = st.selectbox("Has Partner?", ["No", "Yes"])
     dependents = st.selectbox("Has Dependents?", ["No", "Yes"])
 
-    # Create a dictionary from the user inputs
+    # Create a dictionary from the user inputs — ALL VALUES AS STRINGS OR ORIGINAL TYPE
     input_data = {
         'gender': gender,
-        'SeniorCitizen': senior_citizen,
+        'SeniorCitizen': senior_citizen,  # This is numerical — will be scaled
         'Partner': partner,
         'Dependents': dependents,
-        'tenure': tenure,
+        'tenure': tenure,  # Numerical
         'PhoneService': has_phone_service,
         'MultipleLines': multiple_lines,
         'InternetService': has_internet_service,
@@ -73,8 +79,8 @@ with st.container():
         'Contract': contract,
         'PaperlessBilling': paperless_billing,
         'PaymentMethod': payment_method,
-        'MonthlyCharges': monthly_charges,
-        'TotalCharges': total_charges,
+        'MonthlyCharges': monthly_charges,  # Numerical
+        'TotalCharges': total_charges,  # Numerical
     }
 
 # Convert input data to a DataFrame
@@ -83,24 +89,16 @@ input_df = pd.DataFrame([input_data])
 # Button to make a prediction
 if st.button("Predict Churn"):
     try:
-        # 👇 Preprocess manually (safe for now, assuming preprocessor doesn't handle these)
-        binary_cols = ['PhoneService', 'MultipleLines', 'PaperlessBilling', 'Partner', 'Dependents']
-        for col in binary_cols:
-            if col in input_df.columns:
-                input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0}).astype(int)
+        # ✅ CRITICAL: DO NOT MANUALLY ENCODE — Let preprocessor handle it
+        # The preprocessor expects raw categories (strings) for categorical columns
+        # and raw numbers for numerical columns — just like during training.
 
-        internet_cols = ['OnlineSecurity', 'OnlineBackup', 'DeviceProtection', 'TechSupport', 'StreamingTV', 'StreamingMovies']
-        for col in internet_cols:
-            if col in input_df.columns:
-                input_df[col] = input_df[col].replace({'Yes': 1, 'No': 0, 'No internet service': 0}).astype(int)
-
-        # Ensure numerical columns are float
-        numerical_cols = ['tenure', 'MonthlyCharges', 'TotalCharges']
+        # Ensure numerical columns are float (optional safety)
+        numerical_cols = ['SeniorCitizen', 'tenure', 'MonthlyCharges', 'TotalCharges']
         for col in numerical_cols:
-            if col in input_df.columns:
-                input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0).astype(float)
+            input_df[col] = pd.to_numeric(input_df[col], errors='coerce').fillna(0)
 
-        # Apply the preprocessor
+        # ✅ Apply the preprocessor — it will OneHotEncode categorical and Scale numerical
         input_processed = preprocessor.transform(input_df)
 
         # Make prediction
@@ -116,6 +114,7 @@ if st.button("Predict Churn"):
 
     except Exception as e:
         st.error(f"An error occurred during prediction: {e}")
+        st.exception(e)  # For debugging — remove in production
 
 st.markdown("---")
 st.caption("💡 Tip: Adjust inputs to see how churn probability changes.")
